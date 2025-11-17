@@ -1,0 +1,34 @@
+button {
+  background-color: transparent;
+  border: none;
+  margin: 0;
+  padding: 4px 6px;
+  transition: background-color 200ms ease;
+}
+
+button.focused {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+button.urgent {
+  background-color: rgba(217, 108, 127, 0.9);
+}
+
+button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+button.focused:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+}
+
+button.dragging {
+  opacity: 0.6;
+  background-color: rgba(102, 204, 255, 0.3);
+}
+
+button.drag-over {
+  background-color: rgba(102, 255, 153, 0.2);
+  border: 1px dashed rgba(102, 255, 153, 0.6);
+}

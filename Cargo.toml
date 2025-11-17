@@ -1,0 +1,27 @@
+[package]
+name = "niri_window_buttons"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87.0"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+async-channel = "2.5"
+async-stream = "0.3"
+bitflags = "2.9"
+freedesktop-icons = "0.4"
+futures = "0.3"
+itertools = "0.14"
+linicon = "2.3"
+niri-ipc = ">=25.8.0, <25.9.0"
+regex = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+waybar-cffi = "0.1"
+zbus = "5.10"
