@@ -23,8 +23,8 @@ A Waybar module for displaying and managing traditional window buttons for the N
 Example configuration:
 ```jsonc
 {
-  "modules-left": ["cffi/niri-window-buttons"],
-  "cffi/niri-window-buttons": {
+  "modules-left": ["cffi/niri_window_buttons"],
+  "cffi/niri_window_buttons": {
     "module_path": "/path/to/libniri_window_buttons.so",
     "show_all_outputs": false,
     "only_current_workspace": false,
@@ -101,7 +101,7 @@ The compiled module will be at `/niri_window_buttons/target/release/libniri_wind
 
 ## Styling
 
-Customize appearance using Waybar's GTK CSS support. The module container uses the class `.niri-window-buttons` and contains `button` elements.
+Customize appearance using Waybar's GTK CSS support. The module container uses the class `.niri_window_buttons` and contains `button` elements.
 
 **Available CSS Classes:**
 - `.focused` - Active window
