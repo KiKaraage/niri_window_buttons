@@ -62,7 +62,7 @@ Example configuration:
 cargo build --release
 ```
 
-The compiled module will be at `target/release/libniri_window_buttons.so`.
+The compiled module will be at `/niri_window_buttons/target/release/libniri_window_buttons.so`.
 
 ### Available Settings
 
