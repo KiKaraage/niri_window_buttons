@@ -5,7 +5,7 @@ use std::{
 };
 use waybar_cffi::gtk::{
     gio::DesktopAppInfo,
-    prelude::{AppInfoExt, IconExt},
+    prelude::{AppInfoExt, IconExt, Cast, FileExt, IconThemeExt},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -31,10 +31,6 @@ impl IconResolver {
 }
 
 fn search_for_icon(app_id: &str) -> Option<PathBuf> {
-    if let Some(icon) = query_icon_theme(app_id) {
-        return Some(icon);
-    }
-
     for directory in DATA_DIRECTORIES.iter() {
         for suffix in ["", ".desktop"] {
             let app_path = directory.join(format!("applications/{app_id}{suffix}"));
@@ -68,25 +64,30 @@ fn search_for_icon(app_id: &str) -> Option<PathBuf> {
         }
     }
 
-    None
+    query_icon_theme(app_id)
 }
 
-fn query_icon_theme(app_id: &str) -> Option<PathBuf> {
-    if let Some(path) = freedesktop_icons::lookup(app_id).with_size(512).find() {
-        return Some(path);
-    }
-
-    linicon::lookup_icon(app_id)
-        .with_size(512)
-        .filter_map(Result::ok)
-        .next()
-        .map(|result| result.path)
+fn query_icon_theme(icon_name: &str) -> Option<PathBuf> {
+    use waybar_cffi::gtk::{IconTheme, IconLookupFlags};
+    
+    let icon_theme = IconTheme::default()?;
+    
+    let icon_info = icon_theme.lookup_icon(icon_name, 512, IconLookupFlags::empty())?;
+    
+    icon_info.filename()
 }
 
 fn extract_icon_path(info: &DesktopAppInfo) -> Option<PathBuf> {
-    info.icon()
-        .and_then(|icon| IconExt::to_string(&icon))
-        .and_then(|name| query_icon_theme(&name))
+    use waybar_cffi::gtk::gio::FileIcon;
+    
+    info.icon().and_then(|icon| {
+        if let Some(file_icon) = icon.downcast_ref::<FileIcon>() {
+            return file_icon.file().path();
+        }
+
+        IconExt::to_string(&icon)
+            .and_then(|name| query_icon_theme(&name))
+    })
 }
 
 static DATA_DIRECTORIES: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {

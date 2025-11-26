@@ -349,16 +349,21 @@ impl WindowTracker {
             })
             .collect();
 
-        window_workspace_pairs.sort_by(|a, b| {
-            a.workspace.idx
-                .cmp(&b.workspace.idx)
-                .then_with(|| {
-                    let a_pos = a.window.layout.pos_in_scrolling_layout.unwrap_or_default();
-                    let b_pos = b.window.layout.pos_in_scrolling_layout.unwrap_or_default();
-                    a_pos.0.cmp(&b_pos.0).then_with(|| a_pos.1.cmp(&b_pos.1))
-                })
-                .then_with(|| a.window.id.cmp(&b.window.id))
-        });
+		window_workspace_pairs.sort_by(|a, b| {
+			a.workspace.idx
+				.cmp(&b.workspace.idx)
+				.then_with(|| {
+				    let a_floating = a.window.layout.pos_in_scrolling_layout.is_none();
+				    let b_floating = b.window.layout.pos_in_scrolling_layout.is_none();
+				    a_floating.cmp(&b_floating)
+				})
+				.then_with(|| {
+				    let a_pos = a.window.layout.pos_in_scrolling_layout.unwrap_or_default();
+				    let b_pos = b.window.layout.pos_in_scrolling_layout.unwrap_or_default();
+				    a_pos.0.cmp(&b_pos.0).then_with(|| a_pos.1.cmp(&b_pos.1))
+				})
+				.then_with(|| a.window.id.cmp(&b.window.id))
+		});
 
         let active_workspace = workspaces.values().find(|ws| ws.is_active).map(|ws| ws.id);
         let overview_active = active_workspace.and_then(|ws_id| active_per_workspace.get(&ws_id).copied());
