@@ -1,4 +1,4 @@
-# niri_window_buttons
+# niri_window_buttons [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 A Waybar module for displaying and managing traditional window buttons in the Niri compositor.
 
