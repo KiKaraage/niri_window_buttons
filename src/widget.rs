@@ -472,4 +472,16 @@ impl WindowButton {
         .and_then(|pixbuf| pixbuf.create_surface(0, button.window().as_ref()))
         .map(|surface| gtk::Image::from_surface(Some(&surface)))
     }
+	pub fn resize_for_width(&self, width: i32) {
+		if self.display_titles {
+		    let icon_dim = self.state.settings().icon_size();
+		    let icon_gap = self.state.settings().icon_spacing();
+		    let max_chars = ((width - icon_dim - icon_gap - 16) / 8).max(0);
+		    self.title_label.set_max_width_chars(max_chars);
+		    
+		    if max_chars == 0 {
+		        self.title_label.hide();
+		    }
+		}
+	}
 }

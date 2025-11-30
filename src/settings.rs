@@ -157,11 +157,11 @@ fn default_middle_click() -> WindowAction { WindowAction::Close }
 fn default_context_menu() -> Vec<ContextMenuItem> {
     vec![
         ContextMenuItem {
-            label: "  Maximize Column".to_string(),
+            label: "  Maximize Column".to_string(),
             action: WindowAction::MaximizeColumn,
         },
         ContextMenuItem {
-            label: "  Maximize to Edges".to_string(),
+            label: "  Maximize to Edges".to_string(),
             action: WindowAction::MaximizeEdges,
         },
         ContextMenuItem {
@@ -169,7 +169,7 @@ fn default_context_menu() -> Vec<ContextMenuItem> {
             action: WindowAction::ToggleFloating,
         },
         ContextMenuItem {
-            label: "  Close Window".to_string(),
+            label: "  Close Window".to_string(),
             action: WindowAction::Close,
         },
     ]

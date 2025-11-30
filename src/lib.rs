@@ -332,6 +332,7 @@ impl ModuleInstance {
 
             for button in self.buttons.values() {
                 button.get_widget().set_size_request(final_width, -1);
+				button.resize_for_width(final_width);
             }
         }
 
