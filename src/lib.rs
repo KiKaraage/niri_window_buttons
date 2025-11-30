@@ -280,8 +280,8 @@ impl ModuleInstance {
             if !filter.lock().expect("filter lock").should_display(w.get_output().unwrap_or_default()) {
                 return false;
             }
-            if let Some(app_id) = &w.app_id {
-                if config.should_ignore(app_id) {
+            if let Some(_app_id) = &w.app_id {
+                if config.should_ignore(w.app_id.as_deref(), w.title.as_deref(), w.workspace_id) {
                     return false;
                 }
             }

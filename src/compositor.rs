@@ -33,6 +33,19 @@ impl CompositorClient {
         validate_handled(response)
     }
 
+	#[tracing::instrument(level = "TRACE", err)]
+	pub fn maximize_window_to_edges(&self, window_id: u64) -> Result<(), ModuleError> {
+		self.focus_window(window_id)?;
+		let response = send_request(Request::Action(Action::MaximizeWindowToEdges { id: Some(window_id) }))?;
+		validate_handled(response)
+	}
+
+	#[tracing::instrument(level = "TRACE", err)]
+	pub fn fullscreen_window(&self, window_id: u64) -> Result<(), ModuleError> {
+		let response = send_request(Request::Action(Action::FullscreenWindow { id: Some(window_id) }))?;
+		validate_handled(response)
+	}
+
     #[tracing::instrument(level = "TRACE", err)]
     pub fn toggle_floating(&self, window_id: u64) -> Result<(), ModuleError> {
         let response = send_request(Request::Action(Action::ToggleWindowFloating { id: Some(window_id) }))?;

@@ -15,6 +15,7 @@ pub struct WindowButton {
     display_titles: bool,
     state: SharedState,
     window_id: u64,
+    title: Rc<RefCell<Option<String>>>,
 }
 
 impl Debug for WindowButton {
@@ -81,10 +82,10 @@ impl WindowButton {
             display_titles,
             state: state_clone,
             window_id: window.id,
+            title: Rc::new(RefCell::new(window.title.clone())),
         };
 
         button.setup_click_handlers(window.id);
-        button.setup_right_click_menu(window.id);
         button.setup_drag_reorder();
         button.setup_icon_rendering(icon_location);
 
@@ -105,6 +106,10 @@ impl WindowButton {
 
     #[tracing::instrument(level = "TRACE")]
     pub fn update_title(&self, title: Option<&str>) {
+        if let Some(t) = title {
+            *self.title.borrow_mut() = Some(t.to_string());
+        }
+
         self.gtk_button.set_tooltip_text(title);
 
         if self.display_titles {
@@ -142,103 +147,145 @@ impl WindowButton {
         &self.gtk_button
     }
 
-    fn setup_click_handlers(&self, window_id: u64) {
-        let state = self.state.clone();
-        let state_middle = self.state.clone();
-        let button_ref = self.gtk_button.clone();
-        let last_click_time = Rc::new(RefCell::new(Instant::now() - Duration::from_secs(1)));
+	fn setup_click_handlers(&self, window_id: u64) {
+		let state = self.state.clone();
+		let state_middle = self.state.clone();
+		let state_right = self.state.clone();
+		let button_ref = self.gtk_button.clone();
+		let last_click_time = Rc::new(RefCell::new(Instant::now() - Duration::from_secs(1)));
+		let app_id = self.app_id.clone();
+		let app_id_middle = self.app_id.clone();
+		let app_id_right = self.app_id.clone();
+		let title = self.title.clone();
 
-        self.gtk_button.connect_clicked(move |_| {
-            let is_currently_focused = button_ref.style_context().has_class("focused");
+		let title_clone = title.clone();
+		self.gtk_button.connect_clicked(move |_| {
+		    let is_currently_focused = button_ref.style_context().has_class("focused");
+		    let actions = state.settings().get_click_actions(
+		        app_id.as_deref(),
+		        title_clone.borrow().as_deref()
+		    );
 
-            if is_currently_focused && state.settings().click_focused_maximizes() {
-                let mut last_click = last_click_time.borrow_mut();
-                let now = Instant::now();
-                if now.duration_since(*last_click) > Duration::from_millis(300) {
-                    *last_click = now;
-                    if let Err(e) = state.compositor().maximize_window_column(window_id) {
-                        tracing::warn!(%e, id = window_id, "maximize failed");
-                    }
-                }
-            } else {
+		    if is_currently_focused {
+		        let mut last_click = last_click_time.borrow_mut();
+		        let now = Instant::now();
+		        let time_since_last = now.duration_since(*last_click);
+		        
+		        if time_since_last < Duration::from_millis(300) {
+		            Self::execute_action(&state, window_id, &actions.double_click);
+		            *last_click = Instant::now() - Duration::from_secs(1);
+		        } else {
+		            Self::execute_action(&state, window_id, &actions.left_click_focused);
+		            *last_click = now;
+		        }
+		    } else {
+		        Self::execute_action(&state, window_id, &actions.left_click_unfocused);
+		    }
+		});
+
+		let menu_self = self.clone_for_menu();
+		let title_middle = title.clone();
+		self.gtk_button.connect_button_press_event(move |_, event| {
+		    if event.button() == 2 {
+		        let actions = state_middle.settings().get_click_actions(
+		            app_id_middle.as_deref(),
+		            title_middle.borrow().as_deref()
+		        );
+		        if actions.middle_click == crate::settings::WindowAction::Menu {
+		            menu_self.display_context_menu(window_id);
+		        } else {
+		            Self::execute_action(&state_middle, window_id, &actions.middle_click);
+		        }
+		        gtk::glib::Propagation::Stop
+		    } else if event.button() == 3 {
+		        let actions = state_right.settings().get_click_actions(
+		            app_id_right.as_deref(),
+		            title_middle.borrow().as_deref()
+		        );
+		        if actions.right_click == crate::settings::WindowAction::Menu {
+		            menu_self.display_context_menu(window_id);
+		        } else {
+		            Self::execute_action(&state_right, window_id, &actions.right_click);
+		        }
+		        gtk::glib::Propagation::Stop
+		    } else {
+		        gtk::glib::Propagation::Proceed
+		    }
+		});
+	}
+
+    fn execute_action(state: &SharedState, window_id: u64, action: &crate::settings::WindowAction) {
+        use crate::settings::WindowAction;
+        match action {
+            WindowAction::None => {}
+            WindowAction::Focus => {
                 if let Err(e) = state.compositor().focus_window(window_id) {
                     tracing::warn!(%e, id = window_id, "focus failed");
                 }
             }
-        });
-
-        self.gtk_button.connect_button_press_event(move |_, event| {
-            if event.button() == 2 {
-                if state_middle.settings().middle_click_close() {
-                    if let Err(e) = state_middle.compositor().close_window(window_id) {
-                        tracing::warn!(%e, id = window_id, "close failed");
-                    }
+            WindowAction::Close => {
+                if let Err(e) = state.compositor().close_window(window_id) {
+                    tracing::warn!(%e, id = window_id, "close failed");
                 }
-                gtk::glib::Propagation::Stop
-            } else {
-                gtk::glib::Propagation::Proceed
             }
-        });
+            WindowAction::MaximizeColumn => {
+                if let Err(e) = state.compositor().maximize_window_column(window_id) {
+                    tracing::warn!(%e, id = window_id, "maximize column failed");
+                }
+            }
+            WindowAction::MaximizeEdges => {
+                if let Err(e) = state.compositor().maximize_window_to_edges(window_id) {
+                    tracing::warn!(%e, id = window_id, "maximize to edges failed");
+                }
+            }
+            WindowAction::Fullscreen => {
+                if let Err(e) = state.compositor().fullscreen_window(window_id) {
+                    tracing::warn!(%e, id = window_id, "fullscreen failed");
+                }
+            }
+            WindowAction::ToggleFloating => {
+                if let Err(e) = state.compositor().toggle_floating(window_id) {
+                    tracing::warn!(%e, id = window_id, "toggle floating failed");
+                }
+            }
+            WindowAction::Menu => {}
+        }
     }
 
-    #[tracing::instrument(level = "TRACE", skip(self))]
-    fn display_context_menu(&self, window_id: u64) {
-        let menu = Menu::new();
-        menu.set_reserve_toggle_size(false);
+	#[tracing::instrument(level = "TRACE", skip(self))]
+	fn display_context_menu(&self, window_id: u64) {
+		let menu = Menu::new();
+		menu.set_reserve_toggle_size(false);
 
-        let maximize_item = MenuItem::with_label("  Maximize Column");
-        let floating_item = MenuItem::with_label("󰉩  Toggle Floating");
-        let close_item = MenuItem::with_label("  Close Window");
+		let menu_items = self.state.settings().context_menu();
+		
+		for menu_item in menu_items {
+		    let item = MenuItem::with_label(&menu_item.label);
+		    menu.append(&item);
+		    
+		    let state = self.state.clone();
+		    let action = menu_item.action.clone();
+		    item.connect_activate(move |_| {
+		        Self::execute_action(&state, window_id, &action);
+		    });
+		}
 
-        menu.append(&maximize_item);
-        menu.append(&floating_item);
-        menu.append(&close_item);
+		menu.show_all();
+		menu.popup_at_pointer(None);
+	}
 
-        let state_close = self.state.clone();
-        close_item.connect_activate(move |_| {
-            if let Err(e) = state_close.compositor().close_window(window_id) {
-                tracing::warn!(%e, id = window_id, "close via menu failed");
-            }
-        });
-
-        let state_max = self.state.clone();
-        maximize_item.connect_activate(move |_| {
-            if let Err(e) = state_max.compositor().maximize_window_column(window_id) {
-                tracing::warn!(%e, id = window_id, "maximize via menu failed");
-            }
-        });
-
-        let state_float = self.state.clone();
-        floating_item.connect_activate(move |_| {
-            if let Err(e) = state_float.compositor().toggle_floating(window_id) {
-                tracing::warn!(%e, id = window_id, "toggle floating failed");
-            }
-        });
-
-        menu.show_all();
-        menu.popup_at_pointer(None);
-    }
-
-    fn setup_right_click_menu(&self, window_id: u64) {
-        let menu_self = Self {
-            app_id: self.app_id.clone(),
-            gtk_button: self.gtk_button.clone(),
-            layout_box: self.layout_box.clone(),
-            title_label: self.title_label.clone(),
-            display_titles: self.display_titles,
-            state: self.state.clone(),
-            window_id,
-        };
-
-        self.gtk_button.connect_button_press_event(move |_, event| {
-            if event.button() == 3 {
-                menu_self.display_context_menu(window_id);
-                gtk::glib::Propagation::Stop
-            } else {
-                gtk::glib::Propagation::Proceed
-            }
-        });
-    }
+	fn clone_for_menu(&self) -> Self {
+		Self {
+		    app_id: self.app_id.clone(),
+		    gtk_button: self.gtk_button.clone(),
+		    layout_box: self.layout_box.clone(),
+		    title_label: self.title_label.clone(),
+		    display_titles: self.display_titles,
+		    state: self.state.clone(),
+		    window_id: self.window_id,
+		    title: self.title.clone(),
+		}
+	}
 
     fn setup_drag_reorder(&self) {
         tracing::info!("configuring drag-drop for window {}", self.window_id);

@@ -1,116 +1,219 @@
 # niri_window_buttons
 
-A Waybar module for displaying and managing traditional window buttons in the Niri compositor.
+A Waybar module for displaying and managing window buttons in the Niri compositor with extensive customization options.
 
 ![screenshot](demo.png)
 
 ## Features
 
 - Window buttons with application icons and optional title text
+- Fully configurable click actions (left, right, middle, double-click)
+- Configurable context menu
+- Per-application click behavior and styling via regex title matching
+- Advanced window filtering (by app, title, workspace)
 - Drag and drop window reordering
-- App ID filtering for hidden windows
-- Click handling: activate, maximize, close windows
-- Basic context menu
-- Dynamic button sizing
-- Workspace filtering (all/current)
+- Dynamic button sizing with taskbar width limits
 - Multi-monitor support
 - Notification integration with urgency hints
-- Custom CSS styling
+- Custom CSS classes via pattern matching
 - Shows active window in Niri overview
+
+## Installation
+
+```bash
+cargo build --release
+```
+
+The compiled module will be at `target/release/libniri_window_buttons.so`.
 
 ## Configuration
 
-Example configuration:
+### Basic Example
+
 ```jsonc
 {
   "modules-left": ["cffi/niri_window_buttons"],
   "cffi/niri_window_buttons": {
     "module_path": "/path/to/libniri_window_buttons.so",
-    "show_all_outputs": false,
     "only_current_workspace": false,
     "show_window_titles": true,
-    "min_button_width": 150,
-    "max_button_width": 235,
     "icon_size": 24,
     "icon_spacing": 6,
+    "min_button_width": 150,
+    "max_button_width": 235,
     "max_taskbar_width": 1200,
-    "middle_click_close": true,
-    "click_focused_maximizes": true,
-    "ignore_app_ids": ["some-app-id"],
+    "click_actions": {
+      "left_click_unfocused": "focus",
+      "left_click_focused": "maximize-column",
+      "double_click": "maximize-edges",
+      "right_click": "menu",
+      "middle_click": "close"
+    },
+    "context_menu": [
+      {"label": "  Maximize Column", "action": "maximize-column"},
+      {"label": "  Maximize to Edges", "action": "maximize-edges"},
+      {"label": "󰉩  Toggle Floating", "action": "toggle-floating"},
+      {"label": "  Close Window", "action": "close"}
+    ],
+    "ignore_rules": [],
     "notifications": {
       "enabled": true,
       "use_desktop_entry": true,
-      "use_fuzzy_matching": false,
-      "map_app_ids": {
-        "app.id": "different-app-id"
-      }
+      "use_fuzzy_matching": false
     },
-    "apps": {
-      "app-id": [
-        {
-          "match": "\\([0-9]+\\)$",
-          "class": "unread"
-        }
-      ]
-    }
+    "apps": {}
   }
 }
 ```
 
-## Building
-```bash
-cargo build --release
+### Display Options
+
+- `show_all_outputs` - Show windows from all monitors (default: `false`)
+- `only_current_workspace` - Show only current workspace windows (default: `false`)
+- `show_window_titles` - Display window titles next to icons (default: `true`)
+
+### Size Controls
+
+- `min_button_width` - Minimum button width in pixels (default: `150`)
+- `max_button_width` - Maximum button width in pixels (default: `235`)
+- `max_taskbar_width` - Total taskbar width limit in pixels (default: `1200`)
+- `icon_size` - Icon dimensions in pixels (default: `24`)
+- `icon_spacing` - Space between icon and title in pixels (default: `6`)
+
+### Click Actions
+
+Configure what happens when you click buttons. All click types can be assigned any action, including the context menu:
+
+```jsonc
+"click_actions": {
+  "left_click_unfocused": "focus",
+  "left_click_focused": "maximize-column",
+  "double_click": "maximize-edges",
+  "right_click": "menu",
+  "middle_click": "close"
+}
 ```
 
-The compiled module will be at `/niri_window_buttons/target/release/libniri_window_buttons.so`.
+**Available actions:**
+- `"none"` - Do nothing
+- `"focus"` - Focus/activate the window
+- `"close"` - Close the window
+- `"maximize-column"` - Maximize column width (respects gaps/borders)
+- `"maximize-edges"` - Maximize window to screen edges (no gaps)
+- `"fullscreen"` - Toggle fullscreen mode
+- `"toggle-floating"` - Toggle between floating and tiled
+- `"menu"` - Show context menu
 
-### Available Settings
+### Context Menu
 
-**Display Options:**
-- `show_all_outputs` - Include windows from every monitor (default: `false`)
-- `only_current_workspace` - Limit to active workspace windows (default: `false`)
-- `show_window_titles` - Show title text alongside icons (default: `true`)
+Customize which actions appear in the context menu and their order:
 
-**Size Controls:**
-- `min_button_width` - Smallest allowed button width in pixels (default: `150`)
-- `max_button_width` - Largest allowed button width in pixels (default: `235`)
-- `max_taskbar_width` - Maximum total width for all buttons in pixels (default: `1200`)
-- `icon_size` - Icon dimension in pixels (default: `24`)
-- `icon_spacing` - Pixels between icon and title (default: `6`)
+```jsonc
+"context_menu": [
+  {"label": "  Fullscreen", "action": "fullscreen"},n
+  {"label": "  Maximize Column", "action": "maximize-column"},
+  {"label": "  Maximize to Edges", "action": "maximize-edges"},
+  {"label": "󰉩  Toggle Floating", "action": "toggle-floating"},
+  {"label": "  Close Window", "action": "close"}
+]
+```
 
-**Mouse Actions:**
-- `middle_click_close` - Close window on middle-click (default: `true`)
-- `click_focused_maximizes` - Maximize when clicking focused window (default: `true`)
+The menu can be triggered via any click action by setting it to `"menu"`.
 
-**Filtering:**
-- `ignore_app_ids` - Application IDs to exclude from display (default: `[]`)
+### Per-App Configuration
 
-**Notification Settings:**
-- `enabled` - Activate notification monitoring (default: `true`)
-- `use_desktop_entry` - Try desktop entry matching when PID lookup fails (default: `true`)
-- `use_fuzzy_matching` - Allow case-insensitive and partial ID matching (default: `false`)
+Override click actions and add CSS classes based on app ID and window title patterns:
+
+```jsonc
+"apps": {
+  "firefox": [
+    {
+      "match": ".*Picture-in-Picture.*",
+      "class": "pip",
+      "click_actions": {
+        "left_click_focused": "toggle-floating",
+        "middle_click": "close"
+      }
+    },
+    {
+      "match": ".*",
+      "click_actions": {
+        "left_click_focused": "maximize-edges"
+      }
+    }
+  ],
+  "signal": [
+    {
+      "match": "\\([0-9]+\\)$",
+      "class": "unread"
+    }
+  ]
+}
+```
+
+**Per-app rule fields:**
+- `"match"` - Regex pattern to match against window title (required)
+- `"class"` - CSS class to apply when matched (optional)
+- `"click_actions"` - Override click behavior for matching windows (optional)
+
+Rules are evaluated in order. The first matching rule's settings are applied.
+
+### Ignore Rules
+
+Hide specific windows from the taskbar using flexible matching rules:
+
+```jsonc
+"ignore_rules": [
+  {"app_id": "xpad"},
+  {"app_id": "firefox", "title_contains": "Picture-in-Picture"},
+  {"app_id": "steam", "title_regex": "^Friends List$"},
+  {"workspace": 9},
+  {"title": "Firefox — Sharing Indicator"}
+]
+```
+
+**Available matchers:**
+- `"app_id"` - Exact app ID match
+- `"title"` - Exact window title match
+- `"title_contains"` - Partial title match (substring)
+- `"title_regex"` - Regex pattern against title
+- `"workspace"` - Hide all windows on specific workspace number
+
+All matchers in a single rule must match for the window to be ignored. Use multiple rules for OR logic.
+
+### Notifications
+
+Enable urgency hints when applications request attention:
+
+```jsonc
+"notifications": {
+  "enabled": true,
+  "use_desktop_entry": true,
+  "use_fuzzy_matching": false,
+  "map_app_ids": {
+    "org.telegram.desktop": "telegram"
+  }
+}
+```
+
+- `enabled` - Enable notification monitoring (default: `true`)
+- `use_desktop_entry` - Match via desktop entry if PID lookup fails (default: `true`)
+- `use_fuzzy_matching` - Case-insensitive/partial app ID matching (default: `false`)
 - `map_app_ids` - Translate notification app IDs to window app IDs (default: `{}`)
-
-## Default Functionality
-- Left click, Switch to window.
-- Left click active window, Maximize Column toggle
-- Right click for context menu, including Maximize Column, Toggle Floating, and Close Window
-- Middle click, Close
-- Drag and Drop to reorder
-
 
 ## Styling
 
-Customize appearance using Waybar's GTK CSS support. The module container uses the class `.niri_window_buttons` and contains `button` elements.
+Customize appearance using Waybar's GTK CSS. The module container uses class `.niri_window_buttons` and contains `button` elements.
 
 **Available CSS Classes:**
-- `.focused` - Active window
-- `.urgent` - Notification pending
-- `.dragging` - During drag operation
-- `.drag-over` - Valid drop target
+- `.focused` - Currently focused window
+- `.urgent` - Window with pending notification
+- `.dragging` - Window being dragged
+- `.drag-over` - Valid drop target during drag
 - Custom classes from `apps` configuration
 
-**Styling Example:**
+**Example:**
+
 ```css
 #cffi\.niri_window_buttons button {
   padding: 4px 8px;
@@ -125,7 +228,6 @@ Customize appearance using Waybar's GTK CSS support. The module container uses t
 
 #cffi\.niri_window_buttons button.urgent {
   background: rgba(191, 97, 106, 0.4);
-  border-bottom: 3px solid #bf616a;
 }
 
 #cffi\.niri_window_buttons button.unread {
@@ -133,58 +235,33 @@ Customize appearance using Waybar's GTK CSS support. The module container uses t
 }
 ```
 
-## Wishlist/Ideas
+## Finding App IDs and Titles
 
-- Expand ignore rules, for example:
+Use niri's IPC to inspect windows:
+
+```bash
+niri msg windows
 ```
-"ignore": {
-    "app_id": ["xpad"],
-    "title": [],
-    "rules": []
-}
-"ignore_rules": [
-       {"app_id": "firefox", "title_contains": "Picture-in-Picture"},
-       {"workspace": 9},  // hide everything on workspace 9
-       {"app_id": "steam", "title_regex": "^Friends List$"}
-   ]
-"ignore_titles": ["Picture-in-Picture", "Firefox — Sharing Indicator"]
+
+Or with JSON output for scripting:
+```bash
+niri msg --json windows | jq '.[] | {app_id, title, workspace_id}'
 ```
-- Menu option to hide/nirium hidden workspace? (scratchpad)
-- Change default cursor
-- Scroll buttons to change windows
-- Button grouping
-- ctrl+click multi select
-- Modifier Keys
-- Per app overrides
-- Toggle or shrink label to icon
-- Free reaarange instead of actual Niri workspace order
 
-### Clicking Rules Ideas
+## Limitations
 
-```
-Standard click types:
-left-click (already does focus/activate)
-right-click
-middle-click
-scroll-up
-scroll-down
+- **Drag-and-drop reordering** works by sending multiple move-left/move-right commands to niri, as the IPC doesn't expose absolute window positions
+- **Maximized-to-edges state** cannot be visually indicated because niri IPC doesn't expose this information
 
-Window management:
-focus - activate/focus the window (current default)
-close - close the window
-minimize (scratchpad) - minimize window
-fullscreen - toggle fullscreen
-toggle-floating - toggle floating state
+- **Smart viewport positioning** after drag-and-drop - currently niri auto-scrolls to the moved window, but there's no IPC command to center the view to show both the original and moved window together
 
-Taskbar display:
-toggle-title - show/hide the window title for just that button
+## Wishlist / Future Ideas
 
-Niri-specific:
-move-to-workspace - move window to specific workspace
-move-left / move-right - move window in layout
-consume-into-column / expel-from-column - niri column actions
-
-Other:
-none - do nothing
-menu - context menu
-```
+- Per-workspace app rules (different click actions per workspace)
+- Scroll wheel actions (scroll-up/scroll-down)
+- Move window actions (move-left, move-right, move-to-workspace)
+- Column actions (consume-into-column, expel-from-column)
+- Toggle window title visibility per button
+- Minimize/scratchpad support
+- Window grouping by app
+- Multi-select with modifier keys

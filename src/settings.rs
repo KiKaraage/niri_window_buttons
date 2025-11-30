@@ -25,12 +25,12 @@ pub struct Settings {
     icon_spacing: i32,
     #[serde(default = "default_max_taskbar")]
     max_taskbar_width: i32,
-    #[serde(default = "default_true")]
-    middle_click_close: bool,
-    #[serde(default = "default_true")]
-    click_focused_maximizes: bool,
     #[serde(default)]
-    ignore_app_ids: Vec<String>,
+    click_actions: ClickActions,
+    #[serde(default)]
+    ignore_rules: Vec<IgnoreRule>,
+    #[serde(default = "default_context_menu")]
+    context_menu: Vec<ContextMenuItem>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -57,10 +57,72 @@ impl Default for NotificationConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct AppRule {
+pub struct AppRule {
     #[serde(rename = "match", deserialize_with = "parse_regex")]
     pattern: Regex,
-    class: String,
+    #[serde(default)]
+    class: Option<String>,
+    #[serde(default)]
+    click_actions: Option<ClickActions>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClickActions {
+    #[serde(default = "default_left_unfocused")]
+    pub left_click_unfocused: WindowAction,
+    #[serde(default = "default_left_focused")]
+    pub left_click_focused: WindowAction,
+    #[serde(default = "default_double_click")]
+    pub double_click: WindowAction,
+    #[serde(default = "default_right_click")]
+    pub right_click: WindowAction,
+    #[serde(default = "default_middle_click")]
+    pub middle_click: WindowAction,
+}
+
+impl Default for ClickActions {
+    fn default() -> Self {
+        Self {
+            left_click_unfocused: default_left_unfocused(),
+            left_click_focused: default_left_focused(),
+            double_click: default_double_click(),
+            right_click: default_right_click(),
+            middle_click: default_middle_click(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowAction {
+    None,
+    Focus,
+    Close,
+    MaximizeColumn,
+    MaximizeEdges,
+    Fullscreen,
+    ToggleFloating,
+    Menu,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IgnoreRule {
+    #[serde(default)]
+    pub app_id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "parse_optional_regex")]
+    pub title_regex: Option<Regex>,
+    #[serde(default)]
+    pub title_contains: Option<String>,
+    #[serde(default)]
+    pub workspace: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContextMenuItem {
+    pub label: String,
+    pub action: WindowAction,
 }
 
 fn parse_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
@@ -71,6 +133,14 @@ where
     Regex::new(&pattern).map_err(serde::de::Error::custom)
 }
 
+fn parse_optional_regex<'de, D>(deserializer: D) -> Result<Option<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let pattern: Option<String> = Option::deserialize(deserializer)?;
+    pattern.map(|p| Regex::new(&p).map_err(serde::de::Error::custom)).transpose()
+}
+
 fn default_true() -> bool { true }
 fn default_min_width() -> i32 { 150 }
 fn default_max_width() -> i32 { 235 }
@@ -78,11 +148,43 @@ fn default_icon_size() -> i32 { 24 }
 fn default_spacing() -> i32 { 6 }
 fn default_max_taskbar() -> i32 { 1200 }
 
+fn default_left_unfocused() -> WindowAction { WindowAction::Focus }
+fn default_left_focused() -> WindowAction { WindowAction::MaximizeColumn }
+fn default_double_click() -> WindowAction { WindowAction::MaximizeEdges }
+fn default_right_click() -> WindowAction { WindowAction::Menu }
+fn default_middle_click() -> WindowAction { WindowAction::Close }
+
+fn default_context_menu() -> Vec<ContextMenuItem> {
+    vec![
+        ContextMenuItem {
+            label: "  Maximize Column".to_string(),
+            action: WindowAction::MaximizeColumn,
+        },
+        ContextMenuItem {
+            label: "  Maximize to Edges".to_string(),
+            action: WindowAction::MaximizeEdges,
+        },
+        ContextMenuItem {
+            label: "󰉩  Toggle Floating".to_string(),
+            action: WindowAction::ToggleFloating,
+        },
+        ContextMenuItem {
+            label: "  Close Window".to_string(),
+            action: WindowAction::Close,
+        },
+    ]
+}
+
 impl Settings {
     pub fn get_app_classes(&self, app_id: &str) -> Vec<&str> {
         self.apps
             .get(app_id)
-            .map(|rules| rules.iter().map(|r| r.class.as_str()).collect_vec())
+            .map(|rules| {
+                rules
+                    .iter()
+                    .filter_map(|r| r.class.as_deref())
+                    .collect_vec()
+            })
             .unwrap_or_default()
     }
 
@@ -96,10 +198,44 @@ impl Settings {
                 rules
                     .iter()
                     .filter(move |rule| rule.pattern.is_match(title))
-                    .map(|rule| rule.class.as_str())
+                    .filter_map(|rule| rule.class.as_deref())
             ),
             None => Box::new(std::iter::empty()),
         }
+    }
+
+    pub fn get_click_actions(&self, app_id: Option<&str>, title: Option<&str>) -> ClickActions {
+        if let (Some(id), Some(t)) = (app_id, title) {
+            if let Some(rules) = self.apps.get(id) {
+                for rule in rules {
+                    if rule.pattern.is_match(t) {
+                        if let Some(ref actions) = rule.click_actions {
+                            return actions.clone();
+                        }
+                    }
+                }
+            }
+        }
+        self.click_actions.clone()
+    }
+
+    pub fn should_ignore(&self, app_id: Option<&str>, title: Option<&str>, workspace_id: Option<u64>) -> bool {
+        for rule in &self.ignore_rules {
+            let app_match = rule.app_id.as_ref().map_or(true, |id| app_id == Some(id.as_str()));
+            let title_match = rule.title.as_ref().map_or(true, |t| title == Some(t.as_str()));
+            let title_contains_match = rule.title_contains.as_ref().map_or(true, |contains| {
+                title.map_or(false, |t| t.contains(contains))
+            });
+            let title_regex_match = rule.title_regex.as_ref().map_or(true, |regex| {
+                title.map_or(false, |t| regex.is_match(t))
+            });
+            let workspace_match = rule.workspace.map_or(true, |ws| workspace_id == Some(ws));
+
+            if app_match && title_match && title_contains_match && title_regex_match && workspace_match {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn notifications_enabled(&self) -> bool {
@@ -146,19 +282,11 @@ impl Settings {
         self.icon_spacing
     }
 
-    pub fn should_ignore(&self, app_id: &str) -> bool {
-        self.ignore_app_ids.iter().any(|id| id == app_id)
-    }
-
     pub fn max_taskbar_width(&self) -> i32 {
         self.max_taskbar_width
     }
 
-    pub fn middle_click_close(&self) -> bool {
-        self.middle_click_close
-    }
-
-    pub fn click_focused_maximizes(&self) -> bool {
-        self.click_focused_maximizes
+    pub fn context_menu(&self) -> &[ContextMenuItem] {
+        &self.context_menu
     }
 }
