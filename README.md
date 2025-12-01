@@ -20,6 +20,23 @@ A Waybar module for displaying and managing traditional window buttons in the Ni
 
 ## Installation
 
+### From AUR (Arch Linux)
+
+**Stable release:**
+```bash
+yay -S niri_window_buttons
+```
+
+The compiled module will be at `/usr/lib/waybar/libniri_window_buttons.so`.
+
+**Latest git version:**
+```bash
+yay -S niri_window_buttons-git
+```
+
+The compiled module will also be at `/usr/lib/waybar/libniri_window_buttons.so`.
+
+### Manual Installation
 ```bash
 cargo build --release
 ```
