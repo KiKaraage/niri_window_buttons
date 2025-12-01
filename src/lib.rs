@@ -176,8 +176,9 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
     });
 
     let context = MainContext::default();
+    let main_container_clone = main_container.clone();
     context.spawn_local(async move {
-        ModuleInstance::create(state, button_container, scrolled).run_event_loop().await
+        ModuleInstance::create(state, button_container, scrolled, main_container_clone).run_event_loop().await
     });
 
     Ok(())
@@ -222,17 +223,21 @@ struct ModuleInstance {
     buttons: BTreeMap<u64, WindowButton>,
     container: gtk::Box,
     scrolled_window: ScrolledWindow,
+    main_container: gtk::Box,
     previous_snapshot: Option<WindowSnapshot>,
+    current_output: Option<String>,
     state: SharedState,
 }
 
 impl ModuleInstance {
-    fn create(state: SharedState, container: gtk::Box, scrolled_window: ScrolledWindow) -> Self {
+    fn create(state: SharedState, container: gtk::Box, scrolled_window: ScrolledWindow, main_container: gtk::Box) -> Self {
         Self {
             buttons: BTreeMap::new(),
             container,
             scrolled_window,
+            main_container,
             previous_snapshot: None,
+            current_output: None,
             state,
         }
     }
@@ -256,10 +261,53 @@ impl ModuleInstance {
                 }
                 EventMessage::Workspaces(_) => {
                     let updated_filter = self.determine_display_filter().await;
-                    *display_filter.lock().expect("display filter lock") = updated_filter;
+                    let filter_changed = {
+                        let mut filter_lock = display_filter.lock().expect("display filter lock");
+                        let changed = *filter_lock != updated_filter;
+                        *filter_lock = updated_filter;
+                        changed
+                    };
+                    
+                    if filter_changed {
+                        self.update_output_and_resize().await;
+                    }
                 }
             }
         }
+    }
+
+    async fn update_output_and_resize(&mut self) {
+        let new_output = self.get_current_output_name();
+        
+        if self.current_output.as_deref() != new_output.as_deref() {
+            self.current_output = new_output.clone();
+            
+            let max_width = self.state.settings().max_taskbar_width_for_output(new_output.as_deref());
+            self.main_container.set_size_request(max_width, -1);
+            
+            if let Some(snapshot) = self.previous_snapshot.clone() {
+                let filter = Arc::new(Mutex::new(screen::DisplayFilter::ShowAll));
+                self.handle_window_update(snapshot, filter).await;
+            }
+        }
+    }
+
+    fn get_current_output_name(&self) -> Option<String> {
+        let gdk_window = self.container.window()?;
+        let display = gdk_window.display();
+        let monitor = display.monitor_at_window(&gdk_window)?;
+        
+        let compositor = self.state.compositor().clone();
+        let outputs = compositor.query_outputs().ok()?;
+        
+        for (output_name, output_info) in outputs.into_iter() {
+            let match_result = screen::OutputMatcher::compare(&monitor, &output_info);
+            if match_result == screen::OutputMatcher::all() {
+                return Some(output_name);
+            }
+        }
+        
+        None
     }
 
     #[tracing::instrument(level = "DEBUG", skip(self))]
@@ -436,7 +484,7 @@ impl ModuleInstance {
             let button_count = (self.buttons.len() + 1) as i32;
             let min_width = self.state.settings().min_button_width();
             let max_width = self.state.settings().max_button_width();
-            let total_limit = self.state.settings().max_taskbar_width();
+            let total_limit = self.state.settings().max_taskbar_width_for_output(self.current_output.as_deref());
             
             let initial_width = if max_width * button_count > total_limit {
                 (total_limit / button_count).max(min_width).max(1)
@@ -491,7 +539,7 @@ impl ModuleInstance {
             let button_count = self.buttons.len() as i32;
             let min_width = self.state.settings().min_button_width();
             let max_width = self.state.settings().max_button_width();
-            let total_limit = self.state.settings().max_taskbar_width();
+            let total_limit = self.state.settings().max_taskbar_width_for_output(self.current_output.as_deref());
             
             let final_width = if max_width * button_count > total_limit {
                 (total_limit / button_count).max(min_width).max(1)
@@ -509,7 +557,7 @@ impl ModuleInstance {
 
         if new_button_added {
             let scrolled = self.scrolled_window.clone();
-            gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(100), move || {
+            gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || {
                 let hadj = scrolled.hadjustment();
                 hadj.set_value(hadj.upper() - hadj.page_size());
             });

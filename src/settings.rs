@@ -26,6 +26,8 @@ pub struct Settings {
     #[serde(default = "default_max_taskbar")]
     max_taskbar_width: i32,
     #[serde(default)]
+    max_taskbar_width_per_output: HashMap<String, i32>,
+    #[serde(default)]
     click_actions: ClickActions,
     #[serde(default)]
     ignore_rules: Vec<IgnoreRule>,
@@ -157,11 +159,11 @@ fn default_middle_click() -> WindowAction { WindowAction::Close }
 fn default_context_menu() -> Vec<ContextMenuItem> {
     vec![
         ContextMenuItem {
-            label: "  Maximize Column".to_string(),
+            label: "  Maximize Column".to_string(),
             action: WindowAction::MaximizeColumn,
         },
         ContextMenuItem {
-            label: "  Maximize to Edges".to_string(),
+            label: "  Maximize to Edges".to_string(),
             action: WindowAction::MaximizeEdges,
         },
         ContextMenuItem {
@@ -169,7 +171,7 @@ fn default_context_menu() -> Vec<ContextMenuItem> {
             action: WindowAction::ToggleFloating,
         },
         ContextMenuItem {
-            label: "  Close Window".to_string(),
+            label: "  Close Window".to_string(),
             action: WindowAction::Close,
         },
     ]
@@ -284,6 +286,12 @@ impl Settings {
 
     pub fn max_taskbar_width(&self) -> i32 {
         self.max_taskbar_width
+    }
+
+    pub fn max_taskbar_width_for_output(&self, output: Option<&str>) -> i32 {
+        output
+            .and_then(|name| self.max_taskbar_width_per_output.get(name).copied())
+            .unwrap_or(self.max_taskbar_width)
     }
 
     pub fn context_menu(&self) -> &[ContextMenuItem] {

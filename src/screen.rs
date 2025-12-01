@@ -1,7 +1,7 @@
 use niri_ipc::{LogicalOutput, Output};
 use waybar_cffi::gtk::gdk::{Monitor, traits::MonitorExt};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DisplayFilter {
     ShowAll,
     Only(String),

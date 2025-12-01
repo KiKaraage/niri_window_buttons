@@ -80,6 +80,21 @@ The compiled module will be at `target/release/libniri_window_buttons.so`.
 - `icon_size` - Icon dimensions in pixels (default: `24`)
 - `icon_spacing` - Space between icon and title in pixels (default: `6`)
 
+#### Per-Output Width Configuration
+
+Set different taskbar widths for different monitors:
+```jsonc
+{
+  "max_taskbar_width": 1200,
+  "max_taskbar_width_per_output": {
+    "eDP-1": 800,
+    "HDMI-A-1": 1600,
+    "DP-1": 1400
+  }
+}
+```
+The `max_taskbar_width` is used as the default when no output-specific width is configured. Output names can be found using `niri msg outputs`.
+
 ### Click Actions
 
 Configure what happens when you click buttons. All click types can be assigned any action, including the context menu:
