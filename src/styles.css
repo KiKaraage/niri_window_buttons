@@ -32,3 +32,8 @@ button.drag-over {
   background-color: rgba(102, 255, 153, 0.2);
   border: 1px dashed rgba(102, 255, 153, 0.6);
 }
+
+scrolledwindow overshoot,
+scrolledwindow undershoot {
+  background: none;
+}

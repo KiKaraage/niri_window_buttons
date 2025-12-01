@@ -60,7 +60,6 @@ impl Module for WindowButtonsModule {
 
 waybar_module!(WindowButtonsModule);
 
-#[tracing::instrument(level = "DEBUG", skip_all, err)]
 async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> Result<(), ModuleError> {
     let root = info.get_root_widget();
     
@@ -70,36 +69,38 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
     left_arrow.set_label("◀");
     left_arrow.set_relief(ReliefStyle::None);
     left_arrow.style_context().add_class("scroll-arrow");
+    left_arrow.set_sensitive(false);
     left_arrow.set_no_show_all(true);
+    left_arrow.hide();
     
     let scrolled = ScrolledWindow::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
     scrolled.set_policy(gtk::PolicyType::External, gtk::PolicyType::Never);
     scrolled.set_overlay_scrolling(false);
     scrolled.set_propagate_natural_width(false);
 
-	let scrolled_clone = scrolled.clone();
-	scrolled.connect_scroll_event(move |_, event| {
-		use waybar_cffi::gtk::gdk::ScrollDirection;
-		
-		let hadj = scrolled_clone.hadjustment();
-		let step = hadj.page_size() / 4.0;
-		
-		match event.direction() {
-		    ScrollDirection::Up | ScrollDirection::Left => {
-		        hadj.set_value((hadj.value() - step).max(0.0));
-		        gtk::glib::Propagation::Stop
-		    }
-		    ScrollDirection::Down | ScrollDirection::Right => {
-		        let max = hadj.upper() - hadj.page_size();
-		        hadj.set_value((hadj.value() + step).min(max));
-		        gtk::glib::Propagation::Stop
-		    }
-		    _ => gtk::glib::Propagation::Proceed
-		}
-	});
+    let scrolled_clone = scrolled.clone();
+    scrolled.connect_scroll_event(move |_, event| {
+        use waybar_cffi::gtk::gdk::ScrollDirection;
+        
+        let hadj = scrolled_clone.hadjustment();
+        let step = hadj.page_size() / 4.0;
+        
+        match event.direction() {
+           ScrollDirection::Up | ScrollDirection::Left => {
+               hadj.set_value((hadj.value() - step).max(0.0));
+               gtk::glib::Propagation::Stop
+           }
+           ScrollDirection::Down | ScrollDirection::Right => {
+               let max = hadj.upper() - hadj.page_size();
+               hadj.set_value((hadj.value() + step).min(max));
+               gtk::glib::Propagation::Stop
+           }
+           _ => gtk::glib::Propagation::Proceed
+        }
+    });
     
     let max_width = state.settings().max_taskbar_width();
-    scrolled.set_size_request(max_width, -1);
+    main_container.set_size_request(max_width, -1);
     
     let button_container = gtk::Box::new(Orientation::Horizontal, 0);
     button_container.style_context().add_class("niri-window-buttons");
@@ -109,46 +110,69 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
     right_arrow.set_label("▶");
     right_arrow.set_relief(ReliefStyle::None);
     right_arrow.style_context().add_class("scroll-arrow");
+    right_arrow.set_sensitive(false);
     right_arrow.set_no_show_all(true);
+    right_arrow.hide();
     
     main_container.pack_start(&left_arrow, false, false, 0);
     main_container.pack_start(&scrolled, true, true, 0);
     main_container.pack_start(&right_arrow, false, false, 0);
     
     root.add(&main_container);
-    
+   
     let hadj = scrolled.hadjustment();
-    let left_clone = left_arrow.clone();
-    let right_clone = right_arrow.clone();
-    let hadj_clone = hadj.clone();
     
-    hadj.connect_changed(move |adj| {
-        let upper = adj.upper();
-        let page_size = adj.page_size();
-        let has_overflow = upper > page_size;
+    let update_arrows = {
+        let hadj = hadj.clone();
+        let left_arrow = left_arrow.clone();
+        let right_arrow = right_arrow.clone();
         
-        if has_overflow {
-            left_clone.show();
-            right_clone.show();
-        } else {
-            left_clone.hide();
-            right_clone.hide();
+        move || {
+            let value = hadj.value();
+            let upper = hadj.upper();
+            let page_size = hadj.page_size();
+            let has_overflow = upper > page_size + 0.5;
+            
+            if !has_overflow {
+                left_arrow.hide();
+                right_arrow.hide();
+            } else {
+                left_arrow.show();
+                right_arrow.show();
+                
+                let at_start = value < 0.5;
+                let max_scroll = upper - page_size;
+                let at_end = value >= max_scroll - 0.5;
+                
+                left_arrow.set_sensitive(!at_start);
+                right_arrow.set_sensitive(!at_end);
+            }
         }
+    };
+    
+    let update_on_changed = update_arrows.clone();
+    hadj.connect_changed(move |_| {
+        update_on_changed();
     });
     
-    let hadj_left = hadj_clone.clone();
+    let update_on_value = update_arrows.clone();
+    hadj.connect_value_changed(move |_| {
+        update_on_value();
+    });
+    
+    let hadj_left = hadj.clone();
     left_arrow.connect_clicked(move |_| {
         let current = hadj_left.value();
-        let step = hadj_left.page_size() / 4.0;
-        hadj_left.set_value((current - step).max(0.0));
+        let target = (current - hadj_left.page_size()).max(0.0);
+        smooth_scroll_to(&hadj_left, target);
     });
     
-    let hadj_right = hadj_clone;
+    let hadj_right = hadj.clone();
     right_arrow.connect_clicked(move |_| {
         let current = hadj_right.value();
-        let step = hadj_right.page_size() / 4.0;
         let max = hadj_right.upper() - hadj_right.page_size();
-        hadj_right.set_value((current + step).min(max));
+        let target = (current + hadj_right.page_size()).min(max);
+        smooth_scroll_to(&hadj_right, target);
     });
 
     let context = MainContext::default();
@@ -157,6 +181,41 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
     });
 
     Ok(())
+}
+
+fn smooth_scroll_to(adjustment: &gtk::Adjustment, target: f64) {
+    let start = adjustment.value();
+    let distance = target - start;
+    
+    if distance.abs() < 0.1 {
+        adjustment.set_value(target);
+        return;
+    }
+    
+    let duration = 150.0;
+    let start_time = std::time::Instant::now();
+    let adj = adjustment.clone();
+    
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+        let elapsed = start_time.elapsed().as_millis() as f64;
+        let progress = (elapsed / duration).min(1.0);
+        
+        let eased = ease_out_cubic(progress);
+        let new_value = start + (distance * eased);
+        
+        adj.set_value(new_value);
+        
+        if progress >= 1.0 {
+            gtk::glib::ControlFlow::Break
+        } else {
+            gtk::glib::ControlFlow::Continue
+        }
+    });
+}
+
+fn ease_out_cubic(t: f64) -> f64 {
+    let t = t - 1.0;
+    t * t * t + 1.0
 }
 
 struct ModuleInstance {
@@ -363,64 +422,64 @@ impl ModuleInstance {
         let config = self.state.settings();
         let mut new_button_added = false;
 
-		for window in snapshot.iter().filter(|w| {
-			if !filter.lock().expect("filter lock").should_display(w.get_output().unwrap_or_default()) {
-				return false;
-			}
-			if let Some(_app_id) = &w.app_id {
-				if config.should_ignore(w.app_id.as_deref(), w.title.as_deref(), w.workspace_id) {
-				    return false;
-				}
-			}
-			true
-		}) {
-			let button_count = (self.buttons.len() + 1) as i32;
-			let min_width = self.state.settings().min_button_width();
-			let max_width = self.state.settings().max_button_width();
-			let total_limit = self.state.settings().max_taskbar_width();
-			
-			let initial_width = if max_width * button_count > total_limit {
-				(total_limit / button_count).max(min_width).max(1)
-			} else {
-				max_width
-			}.max(1);
+        for window in snapshot.iter().filter(|w| {
+            if !filter.lock().expect("filter lock").should_display(w.get_output().unwrap_or_default()) {
+                return false;
+            }
+            if let Some(_app_id) = &w.app_id {
+                if config.should_ignore(w.app_id.as_deref(), w.title.as_deref(), w.workspace_id) {
+                   return false;
+                }
+            }
+            true
+        }) {
+            let button_count = (self.buttons.len() + 1) as i32;
+            let min_width = self.state.settings().min_button_width();
+            let max_width = self.state.settings().max_button_width();
+            let total_limit = self.state.settings().max_taskbar_width();
+            
+            let initial_width = if max_width * button_count > total_limit {
+                (total_limit / button_count).max(min_width).max(1)
+            } else {
+                max_width
+            }.max(1);
 
-			let button = self.buttons.entry(window.id).or_insert_with(|| {
-				new_button_added = true;
-				let btn = WindowButton::create(&self.state, window);
-				btn.get_widget().set_size_request(initial_width, -1);
-				self.container.add(btn.get_widget());
-				btn
-			});
+            let button = self.buttons.entry(window.id).or_insert_with(|| {
+                new_button_added = true;
+                let btn = WindowButton::create(&self.state, window);
+                btn.get_widget().set_size_request(initial_width, -1);
+                self.container.add(btn.get_widget());
+                btn
+            });
 
-			button.update_focus(window.is_focused);
-			button.update_title(window.title.as_deref());
-			
-		if window.is_focused {
-			let button_widget = button.get_widget().clone();
-			let scrolled = self.scrolled_window.clone();
-			gtk::glib::idle_add_local_once(move || {
-				let allocation = button_widget.allocation();
-				let hadj = scrolled.hadjustment();
-				let button_x = allocation.x() as f64;
-				let button_width = allocation.width() as f64;
-				let current_scroll = hadj.value();
-				let page_size = hadj.page_size();
-				
-				let button_right = button_x + button_width;
-				let visible_right = current_scroll + page_size;
-				
-				if button_x < current_scroll {
-				    hadj.set_value(button_x);
-				} else if button_right > visible_right {
-				    hadj.set_value(button_right - page_size);
-				}
-			});
-		}
+            button.update_focus(window.is_focused);
+            button.update_title(window.title.as_deref());
+            
+            if window.is_focused {
+                let button_widget = button.get_widget().clone();
+                let scrolled = self.scrolled_window.clone();
+                gtk::glib::idle_add_local_once(move || {
+                    let allocation = button_widget.allocation();
+                    let hadj = scrolled.hadjustment();
+                    let button_x = allocation.x() as f64;
+                    let button_width = allocation.width() as f64;
+                    let current_scroll = hadj.value();
+                    let page_size = hadj.page_size();
+                    
+                    let button_right = button_x + button_width;
+                    let visible_right = current_scroll + page_size;
+                    
+                    if button_x < current_scroll {
+                       hadj.set_value(button_x);
+                    } else if button_right > visible_right {
+                       hadj.set_value(button_right - page_size);
+                    }
+                });
+            }
 
-			removed_windows.remove(&window.id);
-			self.container.reorder_child(button.get_widget(), -1);
-		}
+            removed_windows.remove(&window.id);
+            self.container.reorder_child(button.get_widget(), -1);
+        }
 
         for window_id in removed_windows {
             if let Some(button) = self.buttons.remove(&window_id) {
@@ -434,11 +493,11 @@ impl ModuleInstance {
             let max_width = self.state.settings().max_button_width();
             let total_limit = self.state.settings().max_taskbar_width();
             
-			let final_width = if max_width * button_count > total_limit {
-				(total_limit / button_count).max(min_width).max(1)
-			} else {
-				max_width
-			}.max(1);
+            let final_width = if max_width * button_count > total_limit {
+                (total_limit / button_count).max(min_width).max(1)
+            } else {
+                max_width
+            }.max(1);
 
             for button in self.buttons.values() {
                 button.get_widget().set_size_request(final_width, -1);
