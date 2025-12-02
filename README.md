@@ -145,6 +145,7 @@ Configure what happens when you click buttons. All click types can be assigned a
 - `"close"` - Close the window
 - `"maximize-column"` - Maximize column width (respects gaps/borders)
 - `"maximize-edges"` - Maximize window to screen edges (no gaps)
+- `"center-column"` - Center the focused column on the screen
 - `"fullscreen"` - Toggle fullscreen mode
 - `"toggle-floating"` - Toggle between floating and tiled
 - `"menu"` - Show context menu

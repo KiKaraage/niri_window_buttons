@@ -106,6 +106,7 @@ pub enum WindowAction {
     Close,
     MaximizeColumn,
     MaximizeEdges,
+    CenterColumn,
     Fullscreen,
     ToggleFloating,
     Menu,

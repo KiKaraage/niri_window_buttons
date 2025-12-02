@@ -238,6 +238,11 @@ impl WindowButton {
                     tracing::warn!(%e, id = window_id, "maximize to edges failed");
                 }
             }
+            WindowAction::CenterColumn => {
+                if let Err(e) = state.compositor().center_column(window_id) {
+                    tracing::warn!(%e, id = window_id, "center column failed");
+                }
+            }
             WindowAction::Fullscreen => {
                 if let Err(e) = state.compositor().fullscreen_window(window_id) {
                     tracing::warn!(%e, id = window_id, "fullscreen failed");

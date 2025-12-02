@@ -41,6 +41,13 @@ impl CompositorClient {
 	}
 
 	#[tracing::instrument(level = "TRACE", err)]
+	pub fn center_column(&self, window_id: u64) -> Result<(), ModuleError> {
+		self.focus_window(window_id)?;
+		let response = send_request(Request::Action(Action::CenterColumn {}))?;
+		validate_handled(response)
+	}
+
+	#[tracing::instrument(level = "TRACE", err)]
 	pub fn fullscreen_window(&self, window_id: u64) -> Result<(), ModuleError> {
 		let response = send_request(Request::Action(Action::FullscreenWindow { id: Some(window_id) }))?;
 		validate_handled(response)
