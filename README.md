@@ -285,8 +285,6 @@ Customize appearance using Waybar's GTK CSS. The module container uses class `.n
 - **Drag-and-drop reordering** works by sending multiple move-left/move-right commands to niri, as the IPC doesn't expose absolute window positions
 - **Maximized-to-edges state** cannot be visually indicated because niri IPC doesn't expose this information
 
-- **Smart viewport positioning** after drag-and-drop - currently niri auto-scrolls to the moved window, but there's no IPC command to center the view to show both the original and moved window together
-
 ## Wishlist / Future Ideas
 
 - Per-workspace app rules (different click actions per workspace)

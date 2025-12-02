@@ -100,6 +100,8 @@ impl CompositorClient {
             Err(msg) => return Err(ModuleError::CompositorReply(msg)),
         };
 
+        let currently_focused = all_windows.iter().find(|w| w.is_focused).map(|w| w.id);
+
         let target_window = all_windows.iter().find(|w| w.id == window_id);
         let Some(target) = target_window else {
             tracing::warn!("target window not found in window list");
@@ -126,6 +128,12 @@ impl CompositorClient {
         for _ in 0..count {
             let response = send_request(Request::Action(action.clone()))?;
             validate_handled(response)?;
+        }
+
+        if let Some(original_focus) = currently_focused {
+            if original_focus != window_id {
+                self.focus_window(original_focus)?;
+            }
         }
 
         Ok(())
