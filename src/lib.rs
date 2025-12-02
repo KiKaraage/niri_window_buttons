@@ -98,10 +98,9 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
            _ => gtk::glib::Propagation::Proceed
         }
     });
-    
-    let max_width = state.settings().max_taskbar_width();
-    main_container.set_size_request(max_width, -1);
-    
+
+    main_container.set_size_request(-1, -1);
+
     let button_container = gtk::Box::new(Orientation::Horizontal, 0);
     button_container.style_context().add_class("niri-window-buttons");
     scrolled.add(&button_container);
@@ -267,29 +266,31 @@ impl ModuleInstance {
                         *filter_lock = updated_filter;
                         changed
                     };
-                    
-                    if filter_changed {
-                        self.update_output_and_resize().await;
+
+                    if filter_changed && self.update_output_and_resize().await {
+                        if let Some(snapshot) = self.previous_snapshot.clone() {
+                            let filter = Arc::new(Mutex::new(screen::DisplayFilter::ShowAll));
+                            self.handle_window_update(snapshot, filter).await;
+                        }
                     }
                 }
             }
         }
     }
 
-    async fn update_output_and_resize(&mut self) {
+    async fn update_output_and_resize(&mut self) -> bool {
         let new_output = self.get_current_output_name();
-        
+
         if self.current_output.as_deref() != new_output.as_deref() {
             self.current_output = new_output.clone();
-            
+
             let max_width = self.state.settings().max_taskbar_width_for_output(new_output.as_deref());
             self.main_container.set_size_request(max_width, -1);
-            
-            if let Some(snapshot) = self.previous_snapshot.clone() {
-                let filter = Arc::new(Mutex::new(screen::DisplayFilter::ShowAll));
-                self.handle_window_update(snapshot, filter).await;
-            }
+
+            return true;
         }
+
+        false
     }
 
     fn get_current_output_name(&self) -> Option<String> {
@@ -466,6 +467,8 @@ impl ModuleInstance {
         snapshot: WindowSnapshot,
         filter: Arc<Mutex<screen::DisplayFilter>>,
     ) {
+        self.update_output_and_resize().await;
+
         let mut removed_windows = self.buttons.keys().copied().collect::<BTreeSet<_>>();
         let config = self.state.settings();
         let mut new_button_added = false;

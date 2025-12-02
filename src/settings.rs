@@ -284,10 +284,6 @@ impl Settings {
         self.icon_spacing
     }
 
-    pub fn max_taskbar_width(&self) -> i32 {
-        self.max_taskbar_width
-    }
-
     pub fn max_taskbar_width_for_output(&self, output: Option<&str>) -> i32 {
         output
             .and_then(|name| self.max_taskbar_width_per_output.get(name).copied())
