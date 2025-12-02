@@ -151,12 +151,18 @@ async fn initialize_module(info: &waybar_cffi::InitInfo, state: SharedState) -> 
     
     let update_on_changed = update_arrows.clone();
     hadj.connect_changed(move |_| {
-        update_on_changed();
+        let update = update_on_changed.clone();
+        gtk::glib::idle_add_local_once(move || {
+            update();
+        });
     });
-    
+
     let update_on_value = update_arrows.clone();
     hadj.connect_value_changed(move |_| {
-        update_on_value();
+        let update = update_on_value.clone();
+        gtk::glib::idle_add_local_once(move || {
+            update();
+        });
     });
     
     let hadj_left = hadj.clone();
