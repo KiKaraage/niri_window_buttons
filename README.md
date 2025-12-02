@@ -331,7 +331,6 @@ Customize appearance using Waybar's GTK CSS. The module container uses class `.n
 - Per-workspace app rules (different click actions per workspace)
 - Scroll wheel actions (scroll-up/scroll-down)
 - Move window actions (move-left, move-right, move-to-workspace)
-- Column actions (consume-into-column, expel-from-column)
 - Toggle window title visibility per button
 - Minimize/scratchpad support
 - Window grouping by app
