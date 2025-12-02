@@ -297,8 +297,12 @@ impl WindowTracker {
             }
             Event::WorkspaceActivated { id, .. } => {
                 if let Some(Ready { workspaces, .. }) = &mut self.state {
+                    let activated_output = workspaces.get(&id).and_then(|ws| ws.output.clone());
+
                     for ws in workspaces.values_mut() {
-                        ws.is_active = ws.id == id;
+                        if ws.output == activated_output {
+                            ws.is_active = ws.id == id;
+                        }
                     }
                 }
             }
