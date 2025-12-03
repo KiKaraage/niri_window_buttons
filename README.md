@@ -165,30 +165,30 @@ Configure what happens when you click buttons. All click types can be assigned a
 ```
 
 **Available actions:**
-- `"none"` - Do nothing
-- `"focus-window"` - Focus/activate the window
-- `"close-window"` - Close the window
-- `"maximize-column"` - Maximize column width (respects gaps/borders)
-- `"maximize-window-to-edges"` - Maximize window to screen edges (no gaps)
-- `"center-column"` - Center the focused column on the screen
-- `"center-window"` - Center the window on the screen
-- `"center-visible-columns"` - Center all fully visible columns on the screen
-- `"expand-column-to-available-width"` - Expand column to fill available width
-- `"fullscreen-window"` - Toggle fullscreen mode
-- `"toggle-windowed-fullscreen"` - Toggle windowed fullscreen mode
-- `"toggle-window-floating"` - Toggle between floating and tiled
-- `"consume-window-into-column"` - Stack window into the adjacent column
-- `"expel-window-from-column"` - Unstack window from its column
-- `"reset-window-height"` - Reset window height to default
-- `"switch-preset-column-width"` - Cycle through preset column widths
-- `"switch-preset-window-height"` - Cycle through preset window heights
-- `"move-window-to-workspace-down"` - Move window to workspace below
-- `"move-window-to-workspace-up"` - Move window to workspace above
-- `"move-window-to-monitor-left"` - Move window to monitor on the left
-- `"move-window-to-monitor-right"` - Move window to monitor on the right
-- `"toggle-column-tabbed-display"` - Toggle tabbed display mode for column
-- `"focus-workspace-previous"` - Switch to previously focused workspace
-- `"menu"` - Show context menu
+- `"none"`
+- `"menu"`
+- `"focus-window"`
+- `"close-window"`
+- `"maximize-column"`
+- `"maximize-window-to-edges"`
+- `"center-column"`
+- `"center-window"`
+- `"center-visible-columns"`
+- `"expand-column-to-available-width"`
+- `"fullscreen-window"`
+- `"toggle-windowed-fullscreen"`
+- `"toggle-window-floating"`
+- `"consume-window-into-column"`
+- `"expel-window-from-column"`
+- `"reset-window-height"`
+- `"switch-preset-column-width"`
+- `"switch-preset-window-height"`
+- `"move-window-to-workspace-up"`
+- `"move-window-to-workspace-down"`
+- `"move-window-to-monitor-left"`
+- `"move-window-to-monitor-right"`
+- `"toggle-column-tabbed-display"`
+- `"focus-workspace-previous"`
 
 ### Context Menu
 
