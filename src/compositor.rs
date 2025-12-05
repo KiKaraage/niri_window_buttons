@@ -392,9 +392,10 @@ impl WindowTracker {
                 if let Some(Ready { windows, last_focused_per_workspace, .. }) = &mut self.state {
                     if let Some(old_focused) = windows.values().find(|w| w.is_focused).map(|w| w.id) {
                         if let Some(window) = windows.get(&old_focused) {
-                            if let Some(ws_id) = window.workspace_id {
-                                tracing::info!("remembering window {} on workspace {}", old_focused, ws_id);
-                                last_focused_per_workspace.insert(ws_id, old_focused);
+                            if window.layout.pos_in_scrolling_layout.is_some() {
+                                if let Some(ws_id) = window.workspace_id {
+                                    last_focused_per_workspace.insert(ws_id, old_focused);
+                                }
                             }
                         }
                     }
@@ -405,9 +406,10 @@ impl WindowTracker {
 
                     if let Some(focused_id) = id {
                         if let Some(window) = windows.get(&focused_id) {
-                            if let Some(ws_id) = window.workspace_id {
-                                tracing::info!("window {} now focused on workspace {}", focused_id, ws_id);
-                                last_focused_per_workspace.insert(ws_id, focused_id);
+                            if window.layout.pos_in_scrolling_layout.is_some() {
+                                if let Some(ws_id) = window.workspace_id {
+                                    last_focused_per_workspace.insert(ws_id, focused_id);
+                                }
                             }
                         }
                     }
@@ -496,17 +498,34 @@ impl WindowTracker {
 		    })
 		    .collect();
 
+		let mut position_map: std::collections::HashMap<u64, (usize, usize)> = std::collections::HashMap::new();
+
+		for ws_id in window_workspace_pairs.iter().map(|p| p.workspace.id).collect::<std::collections::BTreeSet<_>>() {
+			let anchor_pos = last_focused_per_workspace.get(&ws_id)
+				.and_then(|win_id| {
+					window_workspace_pairs.iter()
+						.find(|p| p.window.id == *win_id)
+						.and_then(|p| p.window.layout.pos_in_scrolling_layout)
+				})
+				.unwrap_or_else(|| {
+					window_workspace_pairs.iter()
+						.filter(|p| p.workspace.id == ws_id && p.window.layout.pos_in_scrolling_layout.is_some())
+						.filter_map(|p| p.window.layout.pos_in_scrolling_layout)
+						.max_by_key(|pos| (pos.0, pos.1))
+						.unwrap_or((0, 0))
+				});
+
+			for pair in window_workspace_pairs.iter().filter(|p| p.workspace.id == ws_id && p.window.layout.pos_in_scrolling_layout.is_none()) {
+				position_map.insert(pair.window.id, (anchor_pos.0, anchor_pos.1 + 1));
+			}
+		}
+
 		window_workspace_pairs.sort_by(|a, b| {
 			a.workspace.idx
 				.cmp(&b.workspace.idx)
 				.then_with(|| {
-				    let a_floating = a.window.layout.pos_in_scrolling_layout.is_none();
-				    let b_floating = b.window.layout.pos_in_scrolling_layout.is_none();
-				    a_floating.cmp(&b_floating)
-				})
-				.then_with(|| {
-				    let a_pos = a.window.layout.pos_in_scrolling_layout.unwrap_or_default();
-				    let b_pos = b.window.layout.pos_in_scrolling_layout.unwrap_or_default();
+				    let a_pos = a.window.layout.pos_in_scrolling_layout.or_else(|| position_map.get(&a.window.id).copied()).unwrap_or((usize::MAX, 0));
+				    let b_pos = b.window.layout.pos_in_scrolling_layout.or_else(|| position_map.get(&b.window.id).copied()).unwrap_or((usize::MAX, 0));
 				    a_pos.0.cmp(&b_pos.0).then_with(|| a_pos.1.cmp(&b_pos.1))
 				})
 				.then_with(|| a.window.id.cmp(&b.window.id))
